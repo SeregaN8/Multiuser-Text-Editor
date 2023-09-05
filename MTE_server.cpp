@@ -103,15 +103,14 @@ int main(int argc, char* argv[])
             if (buffer[end_pos] == 0) break;
             begin_pos = ++end_pos;
         }
-
-        if (argc > 2) output_filename = argv[2];
-        else output_filename = "output.txt";
     }
     else {
         char* for_init = new char[2];
         for_init[0] = ' ', for_init[1] = 0;
         text.emplace_back(for_init);
     }
+    if (argc > 2) output_filename = argv[2];
+    else output_filename = "output.txt";
 
     for_save_before_delete fictive_var(output_filename, &text);
 
