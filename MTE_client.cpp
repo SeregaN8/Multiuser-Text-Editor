@@ -7,8 +7,8 @@
 #define PORT 37641
 #define buffer_size 10'000'000
 
-HWND MainHwn, hList, hEdit, hReserve, hDownload, hSend, hStop; //window identificator
-LRESULT CALLBACK WndProc (HWND, UINT, WPARAM, LPARAM); //define of functions which works with any command to main window
+HWND MainHwn, hList, hEdit, hReserve, hDownload, hSend, hStop;
+LRESULT CALLBACK WndProc (HWND, UINT, WPARAM, LPARAM);
 
 int identificator_len;
 char* str_identificator = nullptr;
