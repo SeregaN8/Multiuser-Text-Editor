@@ -106,14 +106,14 @@ void initData()
 		while (buffer[end_pos] != '\n' && buffer[end_pos] != 0) ++end_pos;
 		int val{}, r_pos = end_pos;
 		while (r_pos > begin_pos && buffer[r_pos - 1] == '\r') ++val, --r_pos;
-		char* detached_line = new char[end_pos + 1 - begin_pos];
+		char* detached_line = new char[end_pos + 1 - val - begin_pos];
 		size_t write_pos{};
 		while (begin_pos + val < end_pos) detached_line[write_pos++] = buffer[begin_pos++];
 		detached_line[write_pos] = 0;
 		SendMessage(hList, LB_ADDSTRING, 0, (LPARAM)detached_line);
 
 		if (buffer[end_pos] == 0) break;
-		++end_pos, begin_pos = end_pos;
+		begin_pos = ++end_pos;
 		delete[] detached_line;
 	}
 	delete[] buffer;
@@ -243,6 +243,7 @@ void send_changes() { //firstly send changes, then downloads changes, user own c
 		send(client_fd, "n", 1, 0);
 		recv(client_fd, buffer, buffer_size, 0);
 	}
+
 	GetWindowText(hEdit, buffer, buffer_size);
 	int len = GetWindowTextLength(hEdit);
 	buffer[len] = 0;
@@ -254,7 +255,7 @@ void send_changes() { //firstly send changes, then downloads changes, user own c
 
 void extract_text(int first, int second) {
 	if (first > second) std::swap(first, second);
-	size_t text_length{};
+	size_t text_length{1};
 	for (int i = first; i <= second; ++i) {
 		text_length += SendMessage(hList, LB_GETTEXTLEN, i, 0) + 2;
 	}
@@ -266,7 +267,7 @@ void extract_text(int first, int second) {
 		line_for_edit[pos++] = '\r';
 		line_for_edit[pos++] = '\n';
 	}
-	line_for_edit[pos - 1] = 0;
+	line_for_edit[pos] = 0;
 	SetWindowText(hEdit, line_for_edit);
 	delete[] line_for_edit;
 }
