@@ -4,6 +4,7 @@
 #include <random>
 #include <chrono>
 #include <cstring>
+#include <fstream>
 
 std::mt19937_64 rng(std::chrono::steady_clock::now().time_since_epoch().count());
 
@@ -14,7 +15,7 @@ struct treap {
     int size;
     int64_t text_len;
     int subtree_len;
-    const char* reservist{ nullptr };
+    int reservist{ -1 };
 
     treap(const char* line_) : line(line_), left(nullptr), right(nullptr), size(1),
                                text_len(std::strlen(line) + 1), subtree_len(text_len) {}
@@ -29,30 +30,30 @@ struct treap {
     }
 
     void remove_reservation() {
-        reservist = nullptr;
+        reservist = -1;
         if (left) left->remove_reservation();
         if (right) right->remove_reservation();
     }
 
-    void set_reservation(const char* r) {
+    void set_reservation(int r) {
         reservist = r;
         if (left) left->set_reservation(r);
         if (right) right->set_reservation(r);
     }
 
-    std::pair<const char*, int> is_tree_reserved() {
+    std::pair<int, int> is_tree_reserved() {
         if (left) {
-            if (auto pt = left->is_tree_reserved(); pt.first) {
+            if (auto pt = left->is_tree_reserved(); pt.first != -1) {
                 return pt;
             }
         }
-        if (reservist) return { reservist, 1 + (left ? left->size : 0) };
+        if (reservist != -1) return { reservist, 1 + (left ? left->size : 0) };
         if (right) {
-            if (auto pt = right->is_tree_reserved(); pt.first) {
+            if (auto pt = right->is_tree_reserved(); pt.first != -1) {
                 return { pt.first, pt.second + 1 + (left ? left->size : 0) };
             }
         }
-        return { nullptr, -1 };
+        return { -1 , -1 };
     }
 
     ~treap() {
@@ -112,8 +113,8 @@ void remove_reservation(int l, int r, treap* &t) {
     t = t1;
 }
 
-std::pair<const char*, int> check_reservation(int l, int r, treap*& t) {
-    if (r < l || l < 1 || !t) return { nullptr, -1 };
+std::pair<int, int> check_reservation(int l, int r, treap*& t) {
+    if (r < l || l < 1 || !t) return { -1 , -1 };
     treap* t1, * t2, * t3;
     split(t, t2, t3, r);
     split(t2, t1, t2, l - 1);
@@ -125,7 +126,7 @@ std::pair<const char*, int> check_reservation(int l, int r, treap*& t) {
     return ans;
 }
 
-void set_reservation(int l, int r, treap*& t, const char* reservist) {
+void set_reservation(int l, int r, treap*& t, int reservist) {
     if (!t) return;
     if (r < l) return;
     if (l < 1) return;
@@ -213,6 +214,14 @@ void insert_after(treap*& t, int l, treap* ins) {
     t1 = merge(t1, ins);
     t1 = merge(t1, t2);
     t = t1;
+}
+
+void write_to_file(treap* t, std::ofstream& ofs) {
+    if (!t) return;
+    if (t->left) write_to_file(t->left, ofs);
+    while (*(t->line)) ofs << *(t->line), ++(t->line);
+    ofs << '\n';
+    if (t->right) write_to_file(t->right, ofs);
 }
 
 #endif
