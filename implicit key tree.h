@@ -18,7 +18,7 @@ struct treap {
 
     treap(const char* line_) : line(line_), left(nullptr), right(nullptr), size(1),
                                text_len(std::strlen(line) + 1), subtree_len(text_len) {}
-    treap(const char* line_, treap* l, treap* r) : line(line_), left(nullptr), right(nullptr), text_len(std::strlen(line) + 1) {
+    treap(const char* line_, treap* l, treap* r) : line(line_), left(l), right(r), text_len(std::strlen(line) + 1) {
         update_size();
     }
 
