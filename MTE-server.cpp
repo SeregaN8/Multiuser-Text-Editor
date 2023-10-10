@@ -253,7 +253,7 @@ int main(int argc, char* argv[])
             int ind{};
 
             while (buffer[begin_pos]) {
-                while (buffer[end_pos] != '\n' && buffer[end_pos] != 0) std::cerr << buffer[end_pos++];
+                while (buffer[end_pos] != '\n' && buffer[end_pos] != 0) ++end_pos;
                 int val{}, r_pos = end_pos;
                 while (r_pos > begin_pos && buffer[r_pos - 1] == '\r') ++val, --r_pos;
                 char* detached_line = new char[end_pos + 1 - val - begin_pos];
