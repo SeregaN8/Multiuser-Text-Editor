@@ -1,6 +1,7 @@
 #include <windows.h>
 #include <random>
 #include <chrono>
+#include <thread>
 #include <fstream>
 #include <cassert>
 #include <string>
@@ -68,9 +69,8 @@ SOCKET create_connection() {
 	int status;
 	SOCKET client_fd;
 	sockaddr_in serv_addr;
-	if ((client_fd = socket(AF_INET, SOCK_STREAM, 0)) < 0) {
-		MessageBox(MainHwn, "Socket creation error", "error", MB_OKCANCEL | MB_ICONINFORMATION);
-		std::exit(1);
+	if ((client_fd = socket(AF_INET, SOCK_STREAM, 0)) == INVALID_SOCKET) {
+		return INVALID_SOCKET;
 	}
 
 	serv_addr.sin_family = AF_INET;
@@ -79,15 +79,27 @@ SOCKET create_connection() {
 	serv_addr.sin_addr.s_addr = htonl(ip_to_connect);
 
 	if ((status = connect(client_fd, (struct sockaddr*)&serv_addr, sizeof(serv_addr))) < 0) {
-		MessageBox(MainHwn, "Connection Failed", "error", MB_OKCANCEL | MB_ICONINFORMATION);
-		std::exit(1);
+		return INVALID_SOCKET;
 	}
 	return client_fd;
 }
 
-void initData()
+int initData()
 {
+	static int failed_init = 0;
 	SOCKET client_fd = create_connection();
+
+	if (client_fd == INVALID_SOCKET) {
+		if (!failed_init) {
+			int ret = MessageBox(MainHwn, "Failed to connect to server, do you want to wait?", "error", MB_OKCANCEL | MB_ICONINFORMATION);
+			if (ret == IDOK) {
+				failed_init = 1;
+				return 2;
+			}
+			std::exit(0);
+		}
+		return 2;
+	}
 
 	send(client_fd, "i", 1, 0);
 
@@ -117,10 +129,30 @@ void initData()
 		delete[] detached_line;
 	}
 	delete[] buffer;
+	return 0;
 }
 
-bool approved_new_changes() {
+int approved_new_changes() {
+	static int confirmed_network_troubles = 0;
 	SOCKET client_fd = create_connection();
+	if (client_fd == INVALID_SOCKET) {
+		if (!confirmed_network_troubles) {
+			int ret = MessageBox(MainHwn, "It looks like the server is currently unavailable, do you want to wait?", "error", MB_OKCANCEL | MB_ICONINFORMATION);
+			if (ret == IDOK) {
+				confirmed_network_troubles = 1;
+				return 2;
+			}
+			std::exit(0);
+		}
+		return 2;
+	}
+	else {
+		if (confirmed_network_troubles) {
+			MessageBox(MainHwn, "Connection restored", "Notification", MB_OKCANCEL | MB_ICONINFORMATION);
+			confirmed_network_troubles = 0;
+		}
+	}
+
 	char* send_buf = new char[identificator_len + 2];
 	memcpy(send_buf + 2, str_identificator, identificator_len);
 	send_buf[0] = 'c', send_buf[1] = 0;
@@ -135,8 +167,15 @@ bool approved_new_changes() {
 	return ret;
 }
 
-void download_new_changes() {
+int download_new_changes() {
 	SOCKET client_fd = create_connection();
+	if (client_fd == INVALID_SOCKET) {
+		int ret = MessageBox(MainHwn, "Failed to connect to server, do you want to wait?", "error", MB_OKCANCEL | MB_ICONINFORMATION);
+		if (ret == IDOK) {
+			return 2;
+		}
+		std::exit(0);
+	}
 	char* send_buf = new char[identificator_len + 2];
 	memcpy(send_buf + 2, str_identificator, identificator_len);
 	send_buf[0] = 'd', send_buf[1] = 0;
@@ -179,10 +218,18 @@ void download_new_changes() {
 	delete[] send_buf;
 
 	closesocket(client_fd);
+	return 0;
 }
 
 int reserve(int first, int second) { //1 if successful, 0 if reserved by someone, -1 if not actual version
 	SOCKET client_fd = create_connection();
+	if (client_fd == INVALID_SOCKET) {
+		int ret = MessageBox(MainHwn, "Failed to connect to server, do you want to wait?", "error", MB_OKCANCEL | MB_ICONINFORMATION);
+		if (ret == IDOK) {
+			return 2;
+		}
+		std::exit(0);
+	}
 	char* send_buf = new char[2 + identificator_len + string_length(first) + string_length(second) + 2];
 	send_buf[0] = 'r', send_buf[1] = 0;
 	memcpy(send_buf + 2, str_identificator, identificator_len);
@@ -204,8 +251,15 @@ int reserve(int first, int second) { //1 if successful, 0 if reserved by someone
 	return -1;
 }
 
-void send_changes() { //firstly send changes, then downloads changes, user own changes may be not transferred twice over the net
+int send_changes() { //firstly send changes, then downloads changes, user own changes may be not transferred twice over the net
 	SOCKET client_fd = create_connection();
+	if (client_fd == INVALID_SOCKET) {
+		int ret = MessageBox(MainHwn, "Failed to connect to server, do you want to wait?", "error", MB_OKCANCEL | MB_ICONINFORMATION);
+		if (ret == IDOK) {
+			return 2;
+		}
+		std::exit(0);
+	}
 	char* send_buf = new char[identificator_len + 2];
 	memcpy(send_buf + 2, str_identificator, identificator_len);
 	send_buf[0] = 'e', send_buf[1] = 0;
@@ -251,6 +305,7 @@ void send_changes() { //firstly send changes, then downloads changes, user own c
 	delete[] buffer;
 
 	closesocket(client_fd);
+	return 0;
 }
 
 void extract_text(int first, int second) {
@@ -295,11 +350,19 @@ void local_insert(int first, int last, char* str) {
 	}
 }
 
-void stop_function() {
+int stop_function() {
 	SOCKET client_fd = create_connection();
+	if (client_fd == INVALID_SOCKET) {
+		int ret = MessageBox(MainHwn, "Failed to connect to server, do you want to wait?", "error", MB_OKCANCEL | MB_ICONINFORMATION);
+		if (ret == IDOK) {
+			return 2;
+		}
+		std::exit(0);
+	}
 	send(client_fd, "s", 1, 0);
 	closesocket(client_fd);
 	std::exit(0);
+	return 0;
 }
 
 int WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpszCmdLine, int nCmdShow)
@@ -324,7 +387,9 @@ int WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpszCmdLine, int
 	hStop = CreateWindow("BUTTON", "Finish editing",
 		WS_BORDER | WS_VISIBLE |  WS_CHILD, 400, 10, 100, 30, MainHwn, (HMENU)104, hInstance, NULL);
 	UpdateWindow(MainHwn);
-	initData();
+	while (initData() == 2) {
+		std::this_thread::sleep_for(std::chrono::milliseconds(3'000));
+	}
 	ShowWindow(hReserve, 5);
 	SetTimer(MainHwn, 1, 10'000 + rng() % 1000, 0);
 
@@ -356,7 +421,7 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT Message, WPARAM wParam, LPARAM lParam)
 	} break;
 
 	case WM_TIMER:
-		if (approved_new_changes()) {
+		if (approved_new_changes() == 1) {
 			ShowWindow(hDownload, 5);
 			ShowWindow(hReserve, 0);
 			UpdateWindow(MainHwn);
@@ -369,6 +434,7 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT Message, WPARAM wParam, LPARAM lParam)
 			if (!(was_selected && was_selected_with_shift)) break;
 			if (something_is_editing) break;
 			int res = reserve(Lfirst, Lsecond);
+			if (res == 2) return 0;
 			if (res == 1) {
 				was_selected = was_selected_with_shift = false;
 				something_is_editing = true;
@@ -393,14 +459,14 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT Message, WPARAM wParam, LPARAM lParam)
 		}
 		case 102: //hdownload
 		{
-			download_new_changes();
+			if (download_new_changes() == 2) return 0;
 			ShowWindow(hDownload, 0);
 			if (!something_is_editing) ShowWindow(hReserve, 5);
 			UpdateWindow(MainHwn);
 			break;
 		}
 		case 103: {//hSend
-			send_changes();
+			if (send_changes() == 2) return 0;
 			ShowWindow(hReserve, 5);
 			ShowWindow(hSend, 0);
 			ShowWindow(hDownload, 0);
@@ -415,7 +481,7 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT Message, WPARAM wParam, LPARAM lParam)
 			break;
 		}
 		case 104: {
-			stop_function();
+			if (stop_function() == 2) return 0;
 			break;
 		}
 		default:
