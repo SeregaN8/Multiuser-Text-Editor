@@ -5,6 +5,7 @@
 #include <chrono>
 #include <cstring>
 #include <fstream>
+#include <string>
 
 std::mt19937_64 rng(std::chrono::steady_clock::now().time_since_epoch().count());
 
@@ -222,6 +223,15 @@ void write_to_file(treap* t, std::ofstream& ofs) {
     while (*(t->line)) ofs << *(t->line), ++(t->line);
     ofs << '\n';
     if (t->right) write_to_file(t->right, ofs);
+}
+
+std::string generate_admin_key() {
+    std::string ans;
+    for (int i = 0; i < 16; ++i) {
+        if (rng() & 1) ans.push_back(40 + rng() % (94 - 40));
+        else ans.push_back(97 + rng() % (127 - 97));
+    }
+    return ans;
 }
 
 #endif
