@@ -4,17 +4,17 @@
 #include <thread>
 #include <fstream>
 #include <cassert>
+#include <sstream>
 #include <string>
 #include "common server-client functions.h"
 const int PORT = 37641;
 const int buffer_size = 10'000'000;
 
-HWND MainHwn, hList, hEdit, hReserve, hDownload, hSend, hStop;
+HWND MainHwn, hList, hEdit, hReserve, hDownload, hSend;
 LRESULT CALLBACK WndProc (HWND, UINT, WPARAM, LPARAM);
 
-int identificator_len;
-char* str_identificator = nullptr;
 unsigned long ip_to_connect{};
+std::string username;
 std::mt19937_64 rng(std::chrono::steady_clock::now().time_since_epoch().count());
 
 int MRegister(const char* ClassName, WNDPROC wndproc)
@@ -101,18 +101,25 @@ int initData()
 		return 2;
 	}
 
-	send(client_fd, "i", 1, 0);
+	char* to_send = new char[username.length() + 3];
+	int pos = 0;
+	memcpy(to_send, username.c_str(), username.length() + 1), pos += username.length() + 1;
+	to_send[pos++] = 'i', to_send[pos++] = 0;
+	send(client_fd, to_send, pos, 0);
+	delete[] to_send;
 
 	char* buffer = new char[buffer_size] { 0 };
 	recv(client_fd, buffer, buffer_size, 0);
 
 	closesocket(client_fd);
 
-	size_t begin_pos{}, end_pos{};
-	while (buffer[end_pos]) ++identificator_len, ++end_pos;
-	str_identificator = new char[++identificator_len];
-	while (buffer[begin_pos]) str_identificator[begin_pos] = buffer[begin_pos], ++begin_pos;
-	begin_pos = ++end_pos, str_identificator[identificator_len - 1] = 0;
+	if (*buffer == 'U') {
+		MessageBox(MainHwn, "Incorrect name, client don't have access to server", "Error", MB_OK | MB_ICONINFORMATION);
+		std::exit(0);
+	}
+	++buffer;
+
+	size_t begin_pos{}, end_pos{};;
 
 	while (buffer[begin_pos]) {
 		while (buffer[end_pos] != '\n' && buffer[end_pos] != 0) ++end_pos;
@@ -128,6 +135,7 @@ int initData()
 		begin_pos = ++end_pos;
 		delete[] detached_line;
 	}
+	--buffer;
 	delete[] buffer;
 	return 0;
 }
@@ -153,10 +161,11 @@ int approved_new_changes() {
 		}
 	}
 
-	char* send_buf = new char[identificator_len + 2];
-	memcpy(send_buf + 2, str_identificator, identificator_len);
-	send_buf[0] = 'c', send_buf[1] = 0;
-	send(client_fd, send_buf, identificator_len + 2, 0);
+	int pos = 0;
+	char* send_buf = new char[username.length() + 3];
+	memcpy(send_buf, username.c_str(), username.length() + 1), pos += username.length() + 1;
+	send_buf[pos++] = 'c', send_buf[pos++] = 0;
+	send(client_fd, send_buf, pos, 0);
 
 	char buffer[20];
 
@@ -176,10 +185,11 @@ int download_new_changes() {
 		}
 		std::exit(0);
 	}
-	char* send_buf = new char[identificator_len + 2];
-	memcpy(send_buf + 2, str_identificator, identificator_len);
-	send_buf[0] = 'd', send_buf[1] = 0;
-	send(client_fd, send_buf, identificator_len + 2, 0);
+	int pos = 0;
+	char* send_buf = new char[username.length() + 3];
+	memcpy(send_buf, username.c_str(), username.length() + 1), pos += username.length() + 1;
+	send_buf[pos++] = 'd', send_buf[pos++] = 0;
+	send(client_fd, send_buf, pos, 0);
 
 	char* buffer = new char[buffer_size] { 0 };
 	recv(client_fd, buffer, buffer_size, 0);
@@ -230,15 +240,16 @@ int reserve(int first, int second) { //1 if successful, 0 if reserved by someone
 		}
 		std::exit(0);
 	}
-	char* send_buf = new char[2 + identificator_len + string_length(first) + string_length(second) + 2];
-	send_buf[0] = 'r', send_buf[1] = 0;
-	memcpy(send_buf + 2, str_identificator, identificator_len);
-	write_number(first, send_buf + 2 + identificator_len);
-	write_number(second, send_buf + 2 + identificator_len + 1 + string_length(first));
-	send(client_fd, send_buf, identificator_len + 2 + 2 + string_length(first) + string_length(second), 0);
+	int pos = 0;
+	char* send_buf = new char[username.length() + 5 + string_length(first) + string_length(second)];
+	memcpy(send_buf, username.c_str(), username.length() + 1), pos += username.length() + 1;
+	send_buf[pos++] = 'r', send_buf[pos++] = 0;
+	write_number(first, send_buf + pos), pos += 1 + string_length(first);
+	write_number(second, send_buf + pos), pos += 1 + string_length(second);
+	send(client_fd, send_buf, pos, 0);
 
-	char buffer[20];
-	recv(client_fd, buffer, 20, 0);
+	char buffer[100];
+	recv(client_fd, buffer, 100, 0);
 	closesocket(client_fd);
 	delete[] send_buf;
 
@@ -246,12 +257,21 @@ int reserve(int first, int second) { //1 if successful, 0 if reserved by someone
 		return 1;
 	}
 	if (buffer[0] == 'r') {
+		std::string ind(buffer + 2);
+		std::string reservist(buffer + 3 + ind.length());
+		std::string message;
+		message += "Line ";
+		message += ind;
+		message += " is currently reserved by user ";
+		message += reservist;
+		message.push_back('!');
+		MessageBox(MainHwn, message.c_str(), "Error", MB_OK | MB_ICONINFORMATION);
 		return 0;
 	}
 	return -1;
 }
 
-int send_changes() { //firstly send changes, then downloads changes, user own changes may be not transferred twice over the net
+int send_changes(int& first, int& last) { //firstly send changes, then downloads changes, user own changes may be not transferred twice over the net
 	SOCKET client_fd = create_connection();
 	if (client_fd == INVALID_SOCKET) {
 		int ret = MessageBox(MainHwn, "Failed to connect to server, do you want to wait?", "error", MB_OKCANCEL | MB_ICONINFORMATION);
@@ -260,10 +280,11 @@ int send_changes() { //firstly send changes, then downloads changes, user own ch
 		}
 		std::exit(0);
 	}
-	char* send_buf = new char[identificator_len + 2];
-	memcpy(send_buf + 2, str_identificator, identificator_len);
-	send_buf[0] = 'e', send_buf[1] = 0;
-	send(client_fd, send_buf, identificator_len + 2, 0);
+	int pos = 0;
+	char* send_buf = new char[username.length() + 3];
+	memcpy(send_buf, username.c_str(), username.length() + 1), pos += username.length() + 1;
+	send_buf[pos++] = 'e', send_buf[pos++] = 0;
+	send(client_fd, send_buf, pos, 0);
 
 	char* buffer = new char[buffer_size] { 0 };
 	recv(client_fd, buffer, buffer_size, 0);
@@ -302,6 +323,10 @@ int send_changes() { //firstly send changes, then downloads changes, user own ch
 	int len = GetWindowTextLength(hEdit);
 	buffer[len] = 0;
 	send(client_fd, buffer, len + 1, 0);
+	recv(client_fd, buffer, buffer_size, 0);
+	pos = 0;
+	first = int_read(buffer, pos);
+	last = int_read(buffer, pos);
 	delete[] buffer;
 
 	closesocket(client_fd);
@@ -350,25 +375,23 @@ void local_insert(int first, int last, char* str) {
 	}
 }
 
-int stop_function() {
-	SOCKET client_fd = create_connection();
-	if (client_fd == INVALID_SOCKET) {
-		int ret = MessageBox(MainHwn, "Failed to connect to server, do you want to wait?", "error", MB_OKCANCEL | MB_ICONINFORMATION);
-		if (ret == IDOK) {
-			return 2;
-		}
+std::string get_username(const char* pt) {
+	std::string ans;
+	while (32 < *pt && *pt < 127) {
+		ans.push_back(*pt), pt++;
+	}
+	if (ans.empty()) {
+		MessageBox(MainHwn, "Not enough arguments: username expected", "Error", MB_OKCANCEL | MB_ICONINFORMATION);
 		std::exit(0);
 	}
-	send(client_fd, "s", 1, 0);
-	closesocket(client_fd);
-	std::exit(0);
-	return 0;
+	return ans;
 }
 
 int WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpszCmdLine, int nCmdShow)
 {
 	char* szAppName = "WinApiSample";
 	MRegister(szAppName, WndProc);
+	username = get_username(lpszCmdLine);
 
 	MainHwn = CreateWindow(szAppName, "API Sample", WS_MAXIMIZEBOX | WS_VISIBLE | WS_SYSMENU,
 		100, 50, 900, 600, HWND_DESKTOP, NULL, hInstance, NULL); 
@@ -384,8 +407,6 @@ int WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpszCmdLine, int
 		WS_BORDER | WS_CHILD, 720, 530, 150, 30, MainHwn, (HMENU)102, hInstance, NULL);
 	hSend = CreateWindow("BUTTON", "Send changes",
 		WS_BORDER | WS_CHILD, 420, 530, 150, 30, MainHwn, (HMENU)103, hInstance, NULL);
-	hStop = CreateWindow("BUTTON", "Finish editing",
-		WS_BORDER | WS_VISIBLE |  WS_CHILD, 400, 10, 100, 30, MainHwn, (HMENU)104, hInstance, NULL);
 	UpdateWindow(MainHwn);
 	while (initData() == 2) {
 		std::this_thread::sleep_for(std::chrono::milliseconds(3'000));
@@ -445,10 +466,7 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT Message, WPARAM wParam, LPARAM lParam)
 				UpdateWindow(MainHwn);
 				extract_text(Lfirst, Lsecond);
 			}
-			else if (res == 0) {
-				MessageBox(MainHwn, "Lines you try to take for edit are already reserved!", "error", MB_OKCANCEL | MB_ICONINFORMATION);
-			}
-			else {
+			else if (res == -1){
 				ShowWindow(hDownload, 5);
 				ShowWindow(hReserve, 0);
 				UpdateWindow(MainHwn);
@@ -466,22 +484,19 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT Message, WPARAM wParam, LPARAM lParam)
 			break;
 		}
 		case 103: {//hSend
-			if (send_changes() == 2) return 0;
+			int a = Lfirst, b = Lsecond;
+			if (send_changes(a, b) == 2) return 0;
 			ShowWindow(hReserve, 5);
 			ShowWindow(hSend, 0);
 			ShowWindow(hDownload, 0);
 			UpdateWindow(MainHwn);
 			char* buffer = new char[buffer_size];
 			GetWindowText(hEdit, buffer, buffer_size);
-			local_insert(Lfirst, Lsecond, buffer);
+			local_insert(a, b, buffer);
 			delete[] buffer;
 			SetWindowText(hEdit, "");
 
 			something_is_editing = false;
-			break;
-		}
-		case 104: {
-			if (stop_function() == 2) return 0;
 			break;
 		}
 		default:
