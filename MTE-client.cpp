@@ -17,6 +17,17 @@ unsigned long ip_to_connect{};
 std::string username;
 std::mt19937_64 rng(std::chrono::steady_clock::now().time_since_epoch().count());
 
+void ResizeMainWindow()
+{
+	RECT rc;
+	GetClientRect(MainHwn, &rc);
+	SetWindowPos(hList, HWND_TOP, 5, rc.bottom/12, rc.right - 10, 5*rc.bottom/12, SWP_NOZORDER);
+	SetWindowPos(hEdit, HWND_TOP, 5, rc.bottom/2 + 10, rc.right - 10, rc.bottom/3, SWP_NOZORDER);
+	SetWindowPos(hReserve, HWND_TOP, 10, 11 * rc.bottom / 12, 120, 30, SWP_NOZORDER);
+	SetWindowPos(hDownload, HWND_TOP, 4*rc.right/5, 11*rc.bottom/12, 150, 30, SWP_NOZORDER);
+	SetWindowPos(hSend, HWND_TOP, rc.right/2, 11*rc.bottom/12, 150, 30, SWP_NOZORDER);
+}
+
 int MRegister(const char* ClassName, WNDPROC wndproc)
 {
 	WNDCLASSEX   wndClass;
@@ -454,6 +465,10 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT Message, WPARAM wParam, LPARAM lParam)
 			ShowWindow(hReserve, 0);
 			UpdateWindow(MainHwn);
 		}
+		break;
+
+	case WM_SIZE:
+		ResizeMainWindow();
 		break;
 
 	case WM_COMMAND:
