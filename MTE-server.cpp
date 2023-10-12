@@ -59,6 +59,7 @@ int main(int argc, char* argv[])
     const std::string admin_key = generate_admin_key();
     std::map<std::string, int> name_to_index;
     std::vector<std::string> usernames;
+    std::vector<int> disconnected;
     
     char* output_filename{};
 
@@ -85,10 +86,17 @@ int main(int argc, char* argv[])
 
     std::cerr << "Admin key is: \n" << admin_key << '\n' << "Send it to person who you want to be an admin\n";
     for (;;) {
-        /*
         if (std::clock_t current_time = std::clock(); current_time - last_check_run > disabling_time) {
-            //here will be check for all active users
-        }*/
+            for (int i = 0; i < user_count; ++i) {
+                if (!reserved[i].first) continue;
+                if (current_time - last_connection[i] < disabling_time) continue;
+                if (disconnected[i]) continue;
+                int first = get_ind_by_pt(reserved[i].first), second = get_ind_by_pt(reserved[i].second);
+                remove_reservation(first, second, text);
+                disconnected[i] = 1;
+            }
+            last_check_run = current_time;
+        }
 
 
         if ((new_socket = accept(server_fd, (struct sockaddr*)&address, &addrlen)) == INVALID_SOCKET) {
@@ -120,6 +128,7 @@ int main(int argc, char* argv[])
                         usernames.push_back(to_add);
                         last_version_get.emplace_back(-1);
                         last_connection.emplace_back(0);
+                        disconnected.emplace_back(0);
                         reserved.emplace_back(nullptr, nullptr);
                     }
                 }
@@ -196,6 +205,7 @@ int main(int argc, char* argv[])
         }
         else if (buffer[pos] == 'e') { //edited
             pos += 2;
+            bool critical_disconnection = disconnected[id] && (last_version_get[id] < version);
             while (last_version_get[id] < version) {
                 char* to_send = story[last_version_get[id]];
                 int len{};
@@ -215,14 +225,29 @@ int main(int argc, char* argv[])
             std::cerr << "confirmed actuality\n";
 
             recv(new_socket, buffer, buffer_size, 0);
-            ++version, ++last_version_get[id];
             int first = get_ind_by_pt(reserved[id].first), second = get_ind_by_pt(reserved[id].second);
-            char* indexes = new char[string_length(first - 1) + 2 + string_length(second - 1)];
-            write_number(first - 1, indexes), pos = string_length(first - 1) + 1;
+            char* indexes = new char[string_length(first - 1) + 4 + string_length(second - 1)];
+            indexes[1] = 0, pos = 2;
+            write_number(first - 1, indexes + pos), pos += string_length(first - 1) + 1;
             write_number(second - 1, indexes + pos), pos += string_length(second - 1) + 1;
+            if (critical_disconnection) {
+                indexes[0] = 'n';
+            }
+            else {
+                indexes[0] = 'y';
+            }
             send(new_socket, indexes, pos, 0);
             delete[] indexes;
+
+            if (critical_disconnection) {
+                disconnected[id] = 0;
+                reserved[id] = { nullptr, nullptr };
+                last_connection[id] = std::clock();
+                closesocket(new_socket);
+                continue;
+            }
             
+            ++version, ++last_version_get[id];
             remove(text, first, second);
 
             treap* ins = init_from_buffer(buffer);

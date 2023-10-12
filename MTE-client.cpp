@@ -324,7 +324,14 @@ int send_changes(int& first, int& last) { //firstly send changes, then downloads
 	buffer[len] = 0;
 	send(client_fd, buffer, len + 1, 0);
 	recv(client_fd, buffer, buffer_size, 0);
-	pos = 0;
+	if (buffer[0] == 'n') {
+		first = last = -1;
+		delete[] buffer;
+
+		closesocket(client_fd);
+		return 0;
+	}
+	pos = 2;
 	first = int_read(buffer, pos);
 	last = int_read(buffer, pos);
 	delete[] buffer;
@@ -490,6 +497,11 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT Message, WPARAM wParam, LPARAM lParam)
 			ShowWindow(hSend, 0);
 			ShowWindow(hDownload, 0);
 			UpdateWindow(MainHwn);
+			if (a == -1) {
+				MessageBox(MainHwn, "You've been disconnected from server for too long, your changes "
+					"were rejected", "error", MB_OK | MB_ICONINFORMATION);
+				return 0;
+			}
 			char* buffer = new char[buffer_size];
 			GetWindowText(hEdit, buffer, buffer_size);
 			local_insert(a, b, buffer);
